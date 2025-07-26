@@ -1,35 +1,104 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { use, useState } from 'react'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [messages,setMessages] = useState([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [threadId] = useState(Date.now());
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+  const sendMessage = async() => {
+    if(!inputValue.trim() || isLoading) return;
+
+    const userMessage = {role: 'user', content: inputValue};
+    setMessages(prev => [...prev, userMessage]);
+    setInputValue('');
+    setIsLoading(true);
+    try{
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/generate`, {
+        method: 'POST',
+        headers:{
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: inputValue,
+          threadId: threadId,
+        }),
+      });
+
+      if(!response.ok){
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantMessage = {
+        role: 'assistant',
+        content: data.content || 'No response received',
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+      } catch (error) {
+        console.error('Error:', error);
+        const errorMessage = {
+          role: 'assistant',
+          content: `Error: ${error.message}`
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
+};
+
+const handleKeyPress = (e)=> {
+  if(e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+};
+
+return (
+  <div className="app">
+    <div className="chat-contained">
+      <div className="chat-header">
+        <h1>Gemini AI Chat</h1>
+        <p> Ask me anything! I can generate and execute Javascript code. </p>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+
+      <div className="messages-container">
+        {messages.map((message, index) => (
+          <div 
+            key={index}
+            className ={`message ${message.role === 'user' ? 'user-message' : 'assistant-message'}`}
+          >
+            <div className="message-content">
+              {message.content}
+            </div>
+          </div>
+        ))}
+        {isLoading && (
+          <div className="message assistant-message">
+            <div className="message-content loading">
+              Thinking...
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="input-container">
+        <textarea
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Ask me to calculate something, fetch data, or solve a problem..."
+          disabled={isLoading}
+        />
+        <button onClick={sendMessage} disabled={isLoading || !inputValue.trim()}>
+          Send
         </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </div>
+  </div>
+  );
 }
 
 export default App
